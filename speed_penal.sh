@@ -173,7 +173,10 @@ install_speed_limit() {
     
     # 安装限速脚本
    install_speed_script
-    
+   #启动项目
+    start_speed_limit
+    #查看日志
+    view_logs
     echo "speed_limit_v1 项目安装完成"
 }
 
