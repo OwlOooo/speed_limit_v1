@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speed Limit </title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .truncate-text {
+            max-width: 200px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .table-row-hover:hover {
+            background-color: #f8fafc;
+        }
+
+        .spin {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .input-primary.validating {
+            background-image: url('data:image/svg+xml;utf8,<svg class="spinner" viewBox="0 0 50 50"><circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="5"></circle></svg>');
+            background-position: right 10px center;
+            background-repeat: no-repeat;
+            background-size: 20px;
+        }
+
+        .input-primary.valid {
+            border-color: #10B981;
+        }
+
+        .input-primary.invalid {
+            border-color: #EF4444;
+        }
+    </style>
+</head>
+
+<body class="bg-slate-50 min-h-screen">
+    <!-- 顶部导航 -->
+    <nav class="bg-white border-b border-slate-200">
+        <div class="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center space-x-8">
+                    <span class="text-xl font-semibold text-slate-800 flex items-center">
+                        <i class="fas fa-cloud text-blue-500 text-2xl mr-2"></i>
+                        Speed Limit
+                    </span>
+                    <div class="flex space-x-4">
+                        <a href="/index.html"
+                            class="px-3 py-2 text-sm font-medium text-blue-600 border-b-2 border-blue-600">端口管理</a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主内容区 -->
+    <main class="max-w-[1920px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- 搜索区 -->
+        <div class="mb-6">
+            <div class="flex items-center space-x-2">
+                <!-- 搜索框 -->
+                <div class="relative w-64">
+                    <input type="text" id="searchInput"
+                        class="w-full pl-10 pr-4 py-2 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="搜索端口...">
+                    <i class="fas fa-search absolute left-3 top-3 text-slate-400"></i>
+                </div>
+
+                <!-- 清空端口按钮 -->
+                <button id="clearPortsBtn"
+                    class="inline-flex items-center px-4 py-2 border border-slate-200 rounded-lg shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    <i class="fas fa-trash-alt mr-2"></i>
+                    清空端口
+                </button>
+                <!-- 备份按钮 -->
+                <button id="backupBtn"
+                    class="inline-flex items-center px-4 py-2 border border-slate-200 rounded-lg shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    <i class="fas fa-download mr-2"></i>
+                    备份数据
+                </button>
+
+                <!-- 添加按钮 -->
+                <button id="addPortBtn"
+                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    <i class="fas fa-plus mr-2"></i>
+                    添加端口
+                </button>
+            </div>
+        </div>
+
+        <!-- 端口列表 -->
+        <div class="bg-white rounded-lg shadow-sm border border-slate-200">
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-slate-200 text-sm">
+                    <thead class="bg-slate-50">
+                        <tr>
+                            <th scope="col"
+                                class="px-4 py-2 text-center text-xs font-medium text-slate-500  tracking-wider">
+                                名称</th>
+                            <th scope="col"
+                                class="px-4 py-2 text-center text-xs font-medium text-slate-500  tracking-wider">
+                                端口</th>
+                            <th scope="col"
+                                class="px-4 py-2 text-center text-xs font-medium text-slate-500  tracking-wider">
+                                下载/Mbps</th>
+                            <th scope="col"
+                                class="px-4 py-2 text-center text-xs font-medium text-slate-500  tracking-wider">
+                                上传/Mbps
+                            </th>
+                            <th scope="col"
+                                class="px-4 py-2 text-center text-xs font-medium text-slate-500  tracking-wider">
+                                操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="portList" class="bg-white divide-y divide-slate-200 text-xs">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+    <!-- 操作确认模态框 -->
+    <div id="confirmModal" class="fixed inset-0 bg-slate-900/50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+                <h3 id="confirmTitle" class="text-lg font-medium text-slate-900 mb-4"></h3>
+                <p id="confirmMessage" class="text-sm text-slate-500 mb-6"></p>
+                <div class="flex justify-end space-x-4">
+                    <button id="cancelConfirm"
+                        class="px-4 py-2 text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">
+                        取消
+                    </button>
+                    <button id="confirmAction" class="px-4 py-2 text-white bg-red-600 rounded-lg hover:bg-red-700">
+                        确认
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- 添加/编辑模态框 -->
+    <div id="portModal" class="fixed inset-0 bg-slate-900/50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 relative">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 id="modalTitle" class="text-xl font-semibold text-slate-800">添加端口</h2>
+                    <button class="closeModal text-slate-400 hover:text-slate-500">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                <form id="portForm" class="space-y-6">
+                    <input type="hidden" id="portId">
+                    <div class="grid grid-cols-1 gap-6">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">名称</label>
+                            <input type="text" id="portName"
+                                class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">端口</label>
+                            <input type="number" id="port" max="65535" min="1" maxlength="5"
+                                class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">下载/Mbps</label>
+                            <input type="number" id="portDownload" value="30"
+                                class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                required>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-1">上传/Mbps</label>
+                            <input type="number" id="portUpload" value="30"
+                                class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                required>
+                        </div>
+                    </div>
+                    <div class="flex justify-end space-x-4 pt-4">
+                        <button type="button"
+                            class="closeModal px-4 py-2 text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">
+                            取消
+                        </button>
+                        <button type="submit"
+                            class="createBtn px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+                            保存
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- 密码输入模态框 -->
+    <div id="passwordModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg shadow-xl w-96">
+            <div class="px-6 py-4">
+                <h3 class="text-lg font-medium text-slate-900">请输入访问密码</h3>
+                <div class="mt-4">
+                    <input type="password" id="accessPassword"
+                        class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        placeholder="请输入访问密码">
+                </div>
+                <div class="mt-4 flex justify-end">
+                    <button id="submitPassword" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        确定
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 检查cookie中是否已有密码
+        function checkPassword() {
+            const token = getCookie('x-token');
+            if (!token) {
+                $('#passwordModal').removeClass('hidden');
+            }
+            // 如果有token,验证密码是否正确
+            if (token) {
+                $.ajax({
+                    url: '/api/verify-password',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ password: token })
+                })
+                    .done(function (response) {
+                        if (!response.valid) {
+                            // 密码无效,删除cookie并显示密码框
+                            document.cookie = "x-token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+                            $('#passwordModal').removeClass('hidden');
+                        }
+                    })
+                    .fail(function (error) {
+                        console.error('验证密码失败:', error);
+                        showNotification('验证密码失败', 'error');
+                        $('#passwordModal').removeClass('hidden');
+                    });
+            }
+        }
+
+        // 设置cookie
+        function setCookie(name, value, days) {
+            let expires = "";
+            if (days) {
+                const date = new Date();
+                date.setTime(date.getTime() + (days * 24 * 60 * 60 * 1000));
+                expires = "; expires=" + date.toUTCString();
+            }
+            document.cookie = name + "=" + (value || "") + expires + "; path=/";
+        }
+
+        // 获取cookie
+        function getCookie(name) {
+            const nameEQ = name + "=";
+            const ca = document.cookie.split(';');
+            for (let i = 0; i < ca.length; i++) {
+                let c = ca[i];
+                while (c.charAt(0) == ' ') c = c.substring(1, c.length);
+                if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
+            }
+            return null;
+        }
+
+        // 密码提交处理
+        $('#submitPassword').click(function () {
+            const password = $('#accessPassword').val();
+            if (!password) {
+                showNotification('请输入密码', 'error');
+                return;
+            }
+
+            // 验证密码
+            $.ajax({
+                url: '/api/verify-password',
+                method: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ password })
+            })
+                .done(function (response) {
+                    if (response.valid) {
+                        setCookie('x-token', password, 7); // 保存7天
+                        $('#passwordModal').addClass('hidden');
+                        showNotification('密码验证成功');
+                        window.location.reload();
+                    } else {
+                        showNotification('密码错误', 'error');
+                    }
+                })
+                .fail(function (error) {
+                    showNotification('验证密码失败: ' + (error.responseJSON?.message || '未知错误'), 'error');
+                });
+        });
+
+        // 页面加载时检查密码
+        $(document).ready(function () {
+            checkPassword();
+        });
+    </script>
+
+    <script>
+        // 全局 AJAX 错误处理
+        $(document).ajaxError(function (event, jqXHR, settings, error) {
+            if (jqXHR.status === 401 || jqXHR.status === 403) {
+                showNotification(error.responseJSON?.message || '访问密码错误', 'error');
+            }
+        });
+        // 设置全局 AJAX 请求头
+        $.ajaxSetup({
+            beforeSend: function (xhr) {
+                const token = getCookie('x-token');
+                if (token) {
+                    xhr.setRequestHeader('x-api-key', token);
+                }
+            }
+        });
+        // 设置全局 fetch 请求头
+        const originalFetch = window.fetch;
+        window.fetch = async function (url, options = {}) {
+            const token = getCookie('x-token');
+            if (token) {
+                options.headers = {
+                    ...options.headers,
+                    'x-api-key': token
+                };
+            }
+            try {
+                const response = await originalFetch(url, options);
+                if (response.status === 401 || response.status === 403) {
+                    const error = await response.json();
+                    checkPassword();
+                }
+                return response;
+            } catch (error) {
+                showNotification('请求失败: ' + error.message, 'error');
+                throw error;
+            }
+        };
+        $(document).ready(function () {
+            // 加载端口列表
+            function loadPorts() {
+                $.get('/api/get/ports')
+                    .done(function (ports) {
+                        const tbody = $('#portList');
+                        tbody.empty();
+
+                        ports.forEach(port => {
+                            const tr = $('<tr>').addClass('hover:bg-slate-50');
+                            tr.html(`
+                                   <td class="px-4 py-2 whitespace-nowrap text-slate-600 text-xs text-center">
+                                        <div class="flex items-center justify-center">
+                                            <i class="fas fa-plug text-blue-500 mr-2 text-xs"></i>
+                                            <span class="font-medium text-slate-900 text-xs">${port.name || ''}</span>
+                                        </div>
+                                    </td>
+                                    <td class="px-4 py-2 text-center whitespace-nowrap text-slate-600 text-xs">${port.port || ''}</td>
+                                    <td class="px-4 py-2 text-center whitespace-nowrap text-slate-600 text-xs">${port.download || ''}</td>
+                                    <td class="px-4 py-2 text-center whitespace-nowrap text-slate-600 text-xs">${port.upload || ''}</td>
+                                    <td class="px-4 py-2 text-center whitespace-nowrap">
+                                        <div class="flex items-center justify-center space-x-2">
+                                            <button onclick="editPort('${port.port}')" class="text-slate-400 hover:text-green-600 transition-colors" title="编辑">
+                                                <i class="fas fa-edit text-xs"></i>
+                                            </button>
+                                            <button onclick="deletePort('${port.port}')" class="text-slate-400 hover:text-red-600 transition-colors" title="删除">
+                                                <i class="fas fa-trash-alt text-xs"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                `);
+                            tbody.append(tr);
+                        });
+                    })
+                    .fail(function (error) {
+                        console.error('Load ports failed:', error);
+                        showNotification('加载失败: ' + (error.responseJSON?.error || '未知错误'), 'error');
+                    });
+            }
+
+
+            // 编辑端口
+            window.editPort = function (editPort) {
+                console.log('Editing port:', editPort);
+                $.get('/api/get/ports')
+                    .done(function (ports) {
+                        const port = ports.find(p => p.port === editPort);
+                        if (port) {
+                            // 填充表单
+                            $('#modalTitle').text('编辑端口');
+                            $('#portName').val(port.name);
+                            $('#port').val(port.port);
+                            $('#port').prop('disabled', true);
+                            $('#portDownload').val(port.download);
+                            $('#portUpload').val(port.upload);
+                            // 显示模态框
+                            $('#portModal').removeClass('hidden');
+                        }
+                    })
+                    .fail(function (error) {
+                        console.error('Get port failed:', error);
+                        showNotification('获取端口信息失败', error);
+                    });
+            };
+
+
+            // 删除端口
+            // 确认对话框
+            function showConfirmDialog(title, message, onConfirm) {
+                $('#confirmTitle').text(title);
+                $('#confirmMessage').text(message);
+                $('#confirmModal').removeClass('hidden');
+
+                $('#confirmAction').off('click').on('click', function () {
+                    $('#confirmModal').addClass('hidden');
+                    onConfirm();
+                });
+
+                $('#cancelConfirm').off('click').on('click', function () {
+                    $('#confirmModal').addClass('hidden');
+                });
+            }
+
+            window.deletePort = function (port) {
+                console.log('Deleting port:', port);
+                showConfirmDialog(
+                    '删除端口',
+                    '确定要从本地数据库删除这个端口吗？此操作无法恢复。',
+                    function () {
+                        showNotification('正在删除端口...');
+                        $.ajax({
+                            url: `/api/delete/ports/${port}`,
+                            method: 'DELETE'
+                        })
+                            .done(function (response) {
+                                if (response.success) {
+                                    loadPorts();
+                                    showNotification(response.message || '删除成功');
+                                } else {
+                                    showNotification(response.message || '删除失败', 'error');
+                                }
+                            })
+                            .fail(function (error) {
+                                console.error('删除端口失败:', error);
+                                showNotification(error.responseJSON?.message || '删除失败', 'error');
+                            });
+                    }
+                );
+            };
+
+            // 表单提交处理
+            $('#portForm').submit(function (e) {
+                e.preventDefault();
+
+                // 获取表单数据
+                const formData = {
+                    name: $('#portName').val(),
+                    port: $('#port').val(),
+                    download: $('#portDownload').val(),
+                    upload: $('#portUpload').val()
+                };
+
+                const submitBtn = $(this).find('button[type="submit"]');
+                submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i>保存中...');
+
+                $.ajax({
+                    url: '/api/edit/ports',
+                    method: 'PUT',
+                    contentType: 'application/json',
+                    data: JSON.stringify(formData)
+                })
+                    .done(function (response) {
+                        loadPorts();
+                        showNotification('保存成功');
+                        $('#portModal').addClass('hidden');
+                    })
+                    .fail(function (error) {
+                        showNotification('保存失败: ' + (error.responseJSON?.message || '未知错误'), 'error');
+                    })
+                    .always(function () {
+                        submitBtn.prop('disabled', false).html('保存');
+                    });
+            });
+
+            // 通知提示
+            window.showNotification = function (message, type = 'success') {
+                $('.notification').remove();
+                const bgColor = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+                const notification = $(`<div class="notification fixed bottom-4 right-4 ${bgColor} text-white px-6 py-3 rounded-lg shadow-lg z-50">`)
+                    .text(message);
+
+                $('body').append(notification);
+                if (message.includes('成功') || message.includes('有效') || message.includes('失败')) {
+                    setTimeout(() => {
+                        $('.notification').remove();
+                    }, 2000);
+                }
+            };
+
+
+
+
+            // 清空端口按钮点击事件
+            $('#clearPortsBtn').click(async function () {
+                showConfirmDialog(
+                    '清空所有端口',
+                    '确定要从删除所有端口吗？此操作无法恢复。',
+                    function () {
+                        showNotification('正在清空端口...');
+                        $.ajax({
+                            url: `/api/delete-all/ports`,
+                            method: 'DELETE'
+                        })
+                            .done(function (response) {
+                                if (response.success) {
+                                    loadPorts();
+                                    showNotification(response.message || '清空成功');
+                                } else {
+                                    showNotification(response.message || '清空失败', 'error');
+                                }
+                            })
+                            .fail(function (error) {
+                                console.error('清空端口失败:', error);
+                                showNotification(error.responseJSON?.message || '清空失败', 'error');
+                            });
+                    }
+                );
+            });
+
+            // 备份按钮点击事件
+            $('#backupBtn').click(async function () {
+                const backupBtn = $(this);
+                const originalHtml = backupBtn.html();
+                backupBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i>备份中...');
+
+                try {
+                    // 发起下载请求
+                    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                    const filename = `port-backup-${timestamp}.json`;
+
+                    // 使用fetch发起请求并直接下载
+                    const response = await fetch('/api/backup');
+
+                    // 检查响应状态
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    // 克隆响应以避免 "body stream already read" 错误
+                    const responseClone = response.clone();
+                    const blob = await responseClone.blob();
+
+                    // 创建下载链接
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+
+                    // 清理
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+
+                    showNotification('备份成功');
+                } catch (error) {
+                    showNotification('备份失败: ' + error.message, 'error');
+                } finally {
+                    backupBtn.prop('disabled', false).html(originalHtml);
+                }
+            });
+            // 搜索功能
+            $('#searchInput').on('input', function () {
+                const searchText = $(this).val().toLowerCase();
+                $('#portList tr').each(function () {
+                    const text = $(this).text().toLowerCase();
+                    $(this).toggle(text.includes(searchText));
+                });
+            });
+
+            // 模态框操作
+            $('.closeModal').click(function () {
+                $('#portModal').addClass('hidden');
+            });
+
+            // ESC键关闭模态框
+            $(document).keydown(function (e) {
+                if (e.key === 'Escape') {
+                    $('#portModal').addClass('hidden');
+                }
+            });
+
+            // 点击模态框外部关闭
+            $('#portModal').click(function (e) {
+                if (e.target === this) {
+                    $(this).addClass('hidden');
+                }
+            });
+
+            // 添加端口按钮
+            $('#addPortBtn').click(function () {
+                $('#modalTitle').text('添加端口');
+                $('#portForm')[0].reset();
+                $('#portId').val('');
+                $('#portModal').removeClass('hidden');
+            });
+
+            // 初始化加载
+            loadPorts();
+        });
+    </script>
+</body>
+
+</html>

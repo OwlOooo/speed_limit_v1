@@ -1,0 +1,6 @@
+{
+    "ignore": [
+        "/xs/speed_limit_v1/data/*",
+        "*.json"
+    ]
+}
