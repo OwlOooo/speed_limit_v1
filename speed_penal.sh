@@ -221,7 +221,7 @@ install_speed_limit() {
     # 检查已存在安装
     if ! check_existing_installation; then
         return
-    }
+    fi
 
     # 先检查依赖
     check_dependencies
