@@ -177,7 +177,9 @@ install_speed_limit() {
     start_speed_limit
     #查看日志
     view_logs
-    echo "speed_limit_v1 项目安装完成"
+    
+    echo "speed_limit_v1 项目安装完成."
+    echo "请确保已经安装并配置了 xs 命令行工具"
 }
 
 # 函数：启动 speed_limit_v1 项目
