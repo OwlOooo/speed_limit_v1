@@ -147,7 +147,8 @@ router.post('/batch/update/ports', async (req, res) => {
             const existingPort = existingPorts.find(p => p.port === newPort.port);
             return existingPort && (
                 existingPort.upload !== newPort.upload || 
-                existingPort.download !== newPort.download
+                existingPort.download !== newPort.download ||
+                existingPort.name !== newPort.name
             );
         });
         //删除这些端口
