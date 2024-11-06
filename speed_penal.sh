@@ -30,7 +30,7 @@ check_distro() {
 
 # 检查是否已安装
 check_existing_installation() {
-    if [ -d "/xs/speed_limit_v1" ] || [ -f "/usr/local/bin/spl" ]; then
+    if [ -d "/xs/speed_limit_v1" ]]; then
         echo -e "${YELLOW}检测到已存在speed_limit_v1安装${NC}"
         read -p "是否要先卸载已有安装？(y/n): " choice
         case "$choice" in 
