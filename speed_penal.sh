@@ -89,28 +89,92 @@ install_speed_script() {
   fi
 }
 
-# 函数：安装 speed_limit_v1 项目
 install_speed_limit() {
-  # 先检查依赖
-  check_dependencies
-  
-  # 步骤 2: 创建 /xs 目录（如果不存在）
-  if [ ! -d "/xs" ]; then
-    echo "正在创建 /xs 目录..."
-    sudo mkdir -p /xs
-    sudo chown -R $USER:$USER /xs
-  fi
-  
-  # 步骤 3: 克隆或上传项目
-  echo "请手动上传项目..."
-  cd /xs
-  
-  # 步骤 4: 进入项目目录，安装依赖库
-  echo "正在安装 speed_limit_v1 项目依赖库..."
-  cd speed_limit_v1
-  npm install
+    # 先检查依赖
+    check_dependencies
     
-  echo "speed_limit_v1 项目安装完成."
+    # 检查是否安装 wget 或 curl
+    if ! command -v wget >/dev/null 2>&1 && ! command -v curl >/dev/null 2>&1; then
+        echo "正在安装 wget..."
+        if [[ -f /etc/debian_version ]]; then
+            apt-get update && apt-get install -y wget
+        elif [[ -f /etc/redhat-release ]]; then
+            yum install -y wget
+        else
+            echo "无法安装 wget，请手动安装"
+            exit 1
+        fi
+    fi
+
+    # 步骤 1: 创建 /xs 目录（如果不存在）
+    if [ ! -d "/xs" ]; then
+        echo "正在创建 /xs 目录..."
+        mkdir -p /xs
+        chown -R $USER:$USER /xs
+    fi
+    
+    cd /xs
+    
+    # 步骤 2: 下载项目
+    echo "正在从 GitHub 下载项目..."
+    if command -v wget >/dev/null 2>&1; then
+        wget https://codeload.github.com/OwlOooo/speed_limit_v1/zip/refs/heads/main -O speed_limit_v1.zip
+    else
+        curl -L https://codeload.github.com/OwlOooo/speed_limit_v1/zip/refs/heads/main -o speed_limit_v1.zip
+    fi
+
+    # 步骤 3: 安装 unzip（如果需要）
+    if ! command -v unzip >/dev/null 2>&1; then
+        echo "正在安装 unzip..."
+        if [[ -f /etc/debian_version ]]; then
+            apt-get update && apt-get install -y unzip
+        elif [[ -f /etc/redhat-release ]]; then
+            yum install -y unzip
+        else
+            echo "无法安装 unzip，请手动安装"
+            exit 1
+        fi
+    fi
+
+    # 步骤 4: 解压并重命名
+    echo "正在解压项目文件..."
+    unzip -o speed_limit_v1.zip
+    rm -f speed_limit_v1.zip
+    
+    # 如果已存在 speed_limit_v1 目录，先备份
+    if [ -d "speed_limit_v1" ]; then
+        echo "备份现有项目..."
+        mv speed_limit_v1 speed_limit_v1_backup_$(date +%Y%m%d_%H%M%S)
+    fi
+    
+    mv speed_limit_v1-main speed_limit_v1
+    
+    # 步骤 5: 安装项目依赖
+    echo "正在安装项目依赖..."
+    cd speed_limit_v1
+    
+    # 检查是否安装了 nodejs 和 npm
+    if ! command -v node >/dev/null 2>&1; then
+        echo "正在安装 Node.js..."
+        if [[ -f /etc/debian_version ]]; then
+            curl -fsSL https://deb.nodesource.com/setup_16.x | bash -
+            apt-get install -y nodejs
+        elif [[ -f /etc/redhat-release ]]; then
+            curl -fsSL https://rpm.nodesource.com/setup_16.x | bash -
+            yum install -y nodejs
+        else
+            echo "无法安装 Node.js，请手动安装"
+            exit 1
+        fi
+    fi
+    
+    # 安装项目依赖
+    npm install
+    
+    # 安装限速脚本
+   install_speed_script
+    
+    echo "speed_limit_v1 项目安装完成"
 }
 
 # 函数：启动 speed_limit_v1 项目
