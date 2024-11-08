@@ -347,6 +347,11 @@ change_password() {
         return 1
     fi
 }
+# 函数：安装TCP加速脚本
+install_tcp_script() {
+  echo -e "${YELLOW}正在下载并安装TCP加速脚本...${NC}"
+  wget --no-check-certificate -O tcp.sh http://www.78idc.cn/tcp.sh && chmod +x tcp.sh && ./tcp.sh
+}
 # 函数：显示菜单
 show_menu() {
   echo -e "${YELLOW}spl 项目管理菜单:${NC}"
@@ -358,7 +363,8 @@ show_menu() {
   echo "6. 检查环境依赖"
   echo "7. 安装限速脚本"
   echo "8. 修改访问密码"
-  echo "9. 卸载 speed_limit_panel"
+  echo "9. TCP加速脚本&&更新软件源"
+  echo "10. 卸载 speed_limit_panel"
   echo -e "${YELLOW}按 Ctrl+C 退出脚本${NC}"
 }
 
@@ -403,6 +409,9 @@ main() {
         change_password
         ;;
       9)
+        install_tcp_script
+        ;;
+      10)
         uninstall_speed_limit
         ;;
       *)
