@@ -249,12 +249,12 @@ install_speed_limit() {
     cd /xs
     
     # 步骤 2: 下载项目
-    echo -e "${YELLOW}正在从 GitHub 下载项目...${NC}"
-    if command -v wget >/dev/null 2>&1; then
-        wget https://codeload.github.com/OwlOooo/speed_limit_v1/zip/refs/heads/main -O speed_limit_v1.zip
-    else
-        curl -L https://codeload.github.com/OwlOooo/speed_limit_v1/zip/refs/heads/main -o speed_limit_v1.zip
-    fi
+   echo -e "${YELLOW}正在从 GitHub 下载项目...${NC}"
+  if command -v wget >/dev/null 2>&1; then
+      wget https://github.com/OwlOooo/speed_limit_v1/archive/refs/heads/main.zip -O speed_limit_v1.zip
+  else
+      curl -L https://github.com/OwlOooo/speed_limit_v1/archive/refs/heads/main.zip -o speed_limit_v1.zip
+  fi
 
     # 步骤 3: 安装 unzip（如果需要）
     if ! command -v unzip >/dev/null 2>&1; then
