@@ -1,1 +1,26 @@
-[]
+[
+  {
+    "name": "2",
+    "port": "1001",
+    "download": "2",
+    "upload": "2"
+  },
+  {
+    "name": "4",
+    "port": "1004",
+    "download": "5",
+    "upload": "5"
+  },
+  {
+    "name": "6",
+    "port": "1006",
+    "download": "2",
+    "upload": "2"
+  },
+  {
+    "name": "5",
+    "port": "1002",
+    "download": "3",
+    "upload": "3"
+  }
+]

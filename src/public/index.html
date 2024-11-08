@@ -103,6 +103,18 @@
                     <i class="fas fa-plus mr-2"></i>
                     添加端口
                 </button>
+                <!-- 批量添加端口 -->
+                <button id="batchAddPorts"
+                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    <i class="fas fa-plus mr-2"></i>
+                    批量添加
+                </button>
+                <!-- 批量覆盖端口 -->
+                <button id="batchCoverPortsBtn"
+                    class="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                    <i class="fas fa-plus mr-2"></i>
+                    批量覆盖
+                </button>
             </div>
         </div>
 
@@ -151,6 +163,68 @@
                         确认
                     </button>
                 </div>
+            </div>
+        </div>
+    </div>
+    <!-- 批量添加模态框 -->
+    <div id="batchAddModal" class="fixed inset-0 bg-slate-900/50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 relative">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-semibold text-slate-800">批量添加端口</h2>
+                    <button class="closeBatchModal text-slate-400 hover:text-slate-500">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                <form id="batchAddForm" class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">端口配置</label>
+                        <textarea id="batchPorts" rows="10" placeholder='名称 端口 下载/Mbps 上传/Mbps, 每行一个端口配置'
+                            class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-mono text-sm"
+                            required></textarea>
+                    </div>
+                    <div class="flex justify-end space-x-4 pt-4">
+                        <button type="button"
+                            class="closeBatchModal px-4 py-2 text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">
+                            取消
+                        </button>
+                        <button type="submit"
+                            class="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+                            批量添加
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+     <!-- 批量覆盖模态框 -->
+     <div id="batchCoverModal" class="fixed inset-0 bg-slate-900/50 hidden z-50">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-xl shadow-xl max-w-2xl w-full p-6 relative">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-xl font-semibold text-slate-800">批量覆盖端口(会删除现有端口,然后重新添加新端口,请谨慎操作)</h2>
+                    <button class="closeBatchCoverModal text-slate-400 hover:text-slate-500">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                <form id="batchCoverForm" class="space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1">端口配置</label>
+                        <textarea id="batchCoverPorts" rows="10" placeholder='名称 端口 下载/Mbps 上传/Mbps, 每行一个端口配置'
+                            class="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-mono text-sm"
+                            required></textarea>
+                    </div>
+                    <div class="flex justify-end space-x-4 pt-4">
+                        <button type="button"
+                            class="closeBatchCoverModal px-4 py-2 text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50">
+                            取消
+                        </button>
+                        <button type="submit"
+                            class="px-4 py-2 text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+                            批量添加
+                        </button>
+                    </div>
+                </form>
             </div>
         </div>
     </div>
@@ -416,7 +490,20 @@
                         showNotification('获取端口信息失败', error);
                     });
             };
+            // 批量添加端口
+            // 批量添加端口按钮点击事件
+            $('#batchAddPorts').on('click', function() {
+                console.log('Batch adding ports button clicked');
+                // 显示批量添加模态框
+                $('#batchAddModal').removeClass('hidden');
+            });
 
+            // 批量覆盖端口按钮点击事件
+            $('#batchCoverPortsBtn').on('click', function() {
+                console.log('Batch covering ports button clicked');
+                // 显示批量覆盖模态框
+                $('#batchCoverModal').removeClass('hidden');
+            });
 
             // 删除端口
             // 确认对话框
@@ -461,6 +548,171 @@
                     }
                 );
             };
+            // 批量添加表单提交处理
+            $('#batchAddForm').submit(function (e) {
+                e.preventDefault();
+                
+                try {
+                    // 获取文本框内容并按行分割
+                    const lines = $('#batchPorts').val().trim().split('\n');
+                    // 检查输入是否为空
+                    if (!lines || lines.length === 0) {
+                        showNotification('请输入端口数据', 'error');
+                        return;
+                    }
+
+                    // 检查每行数据的格式
+                    // for (let i = 0; i < lines.length; i++) {
+                    //     const line = lines[i].trim();
+                    //     const parts = line.split(/\s+/);
+                        
+                    //     if (parts.length !== 4) {
+                    //         showNotification(`第 ${i + 1} 行数据格式错误，请检查`, 'error');
+                    //         return;
+                    //     }
+
+                    //     const [name, port, download, upload] = parts;
+                        
+                    //     if (!name || !port || !download || !upload) {
+                    //         showNotification(`第 ${i + 1} 行存在空字段，请检查`, 'error'); 
+                    //         return;
+                    //     }
+                    // }
+                    // 将每行转换为端口对象
+                    const portsData = lines.map(line => {
+                        const [name, port, download, upload] = line.trim().split(/\s+/);
+                        return {
+                            name: name,
+                            port: port,
+                            download: download,
+                            upload: upload
+                        };
+                    });
+
+                    if (!portsData.length) {
+                        showNotification('请输入有效的端口数据', 'error');
+                        return;
+                    }
+
+                    const submitBtn = $(this).find('button[type="submit"]');
+                    submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i>批量添加中...');
+
+                    $.ajax({
+                        url: '/api/batch/add/ports',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify(portsData)
+                    })
+                    .done(function (response) {
+                        if (response.success) {
+                            loadPorts();
+                            showNotification(response.message);
+                            $('#batchAddModal').addClass('hidden');
+                            $('#batchPorts').val('');
+                        } else {
+                            showNotification(response.message || '批量添加失败', 'error');
+                        }
+                    })
+                    .fail(function (error) {
+                        showNotification(error.responseJSON?.message || '批量添加失败', 'error');
+                    })
+                    .always(function () {
+                        submitBtn.prop('disabled', false).html('批量添加');
+                    });
+
+                } catch (error) {
+                    showNotification('数据格式无效，请检查输入', 'error');
+                }
+            });
+            // 批量覆盖表单提交处理
+            $('#batchCoverForm').submit(function (e) {
+                e.preventDefault();
+                
+                try {
+                    // 获取文本框内容并按行分割
+                    const lines = $('#batchCoverPorts').val().trim().split('\n');
+                     // 检查输入是否为空
+                     if (!lines || lines.length === 0) {
+                        showNotification('请输入端口数据', 'error');
+                        return;
+                    }
+
+                    // 检查每行数据的格式
+                    // for (let i = 0; i < lines.length; i++) {
+                    //     const line = lines[i].trim();
+                    //     const parts = line.split(/\s+/);
+                        
+                    //     if (parts.length !== 4) {
+                    //         showNotification(`第 ${i + 1} 行数据格式错误，请检查`, 'error');
+                    //         return;
+                    //     }
+
+                    //     const [name, port, download, upload] = parts;
+                        
+                    //     if (!name || !port || !download || !upload) {
+                    //         showNotification(`第 ${i + 1} 行存在空字段，请检查`, 'error'); 
+                    //         return;
+                    //     }
+                    // }
+                    // 将每行转换为端口对象
+                    const portsData = lines.map(line => {
+                        const [name, port, download, upload] = line.trim().split(/\s+/);
+                        return {
+                            name: name,
+                            port: port,
+                            download: download,
+                            upload: upload
+                        };
+                    });
+
+                    if (!portsData.length) {
+                        showNotification('请输入有效的端口数据', 'error');
+                        return;
+                    }
+
+                    const submitBtn = $(this).find('button[type="submit"]');
+                    submitBtn.prop('disabled', true).html('<i class="fas fa-spinner fa-spin mr-2"></i>批量覆盖中...');
+
+                    $.ajax({
+                        url: '/api/batch/update/ports',
+                        method: 'POST',
+                        contentType: 'application/json',
+                        data: JSON.stringify(portsData)
+                    })
+                    .done(function (response) {
+                        if (response.success) {
+                            loadPorts();
+                            showNotification("批量添加成功");
+                            $('#batchCoverModal').addClass('hidden');
+                            $('#batchCoverPorts').val('');
+                        } else {
+                            showNotification(response.message || '批量覆盖失败', 'error');
+                        }
+                    })
+                    .fail(function (error) {
+                        showNotification(error.responseJSON?.message || '批量覆盖失败', 'error');
+                    })
+                    .always(function () {
+                        submitBtn.prop('disabled', false).html('批量覆盖');
+                    });
+
+                } catch (error) {
+                    showNotification('数据格式无效，请检查输入', 'error');
+                }
+            });
+
+
+            // 关闭批量添加模态框
+            $('.closeBatchModal').on('click', function() {
+                $('#batchAddModal').addClass('hidden');
+                $('#batchPorts').val('');
+            });
+
+            // 关闭批量覆盖模态框
+            $('.closeBatchCoverModal').on('click', function() {
+                $('#batchCoverModal').addClass('hidden');
+                $('#batchCoverPorts').val('');
+            });
 
             // 表单提交处理
             $('#portForm').submit(function (e) {

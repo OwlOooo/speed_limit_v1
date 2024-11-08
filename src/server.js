@@ -80,45 +80,88 @@ router.put('/edit/ports', async (req, res) => {
 
 
 // 批量添加端口
-// router.post('/batch/add/ports', async (req, res) => {
-//     try {
-//         // 直接使用请求体作为端口数组
-//         const ports = req.body;
-        
-//         if (!Array.isArray(ports)) {
-//             return res.status(400).json({
-//                 success: false,
-//                 message: '无效的端口数据格式'
-//             });
-//         }
+router.post('/batch/add/ports', async (req, res) => {
+    try {
+        // 直接使用请求体作为端口数组
+        const ports = req.body;
 
-//         // 读取现有端口
-//         const existingPorts = await portService.readJSONFile(portService.PORT_FILE);
-        
-//         // 过滤出新的端口
-//         const newPorts = ports.filter(newPort => 
-//             !existingPorts.some(existingPort => existingPort.port === newPort.port)
-//         );
+        if (!Array.isArray(ports)) {
+            return res.status(400).json({
+                success: false,
+                message: '无效的端口数据格式'
+            });
+        }
+       //逐行判断，哪一行格式错误
+       for(let i = 0; i < ports.length; i++) {
+        const port = ports[i];
+        if(!port.port || !port.name || !port.download || !port.upload) {
+            return res.status(400).json({
+                success: false,
+                message: `第 ${i + 1} 行数据格式错误，请检查`
+            });
+        }
+       }
 
-//         // 合并现有端口和新端口
-//         const updatedPorts = [...existingPorts, ...newPorts];
+        // 判断是否为空
+        if (ports.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: '端口数据不能为空'
+            });
+        }
 
-//         // 保存更新后的端口数据
-//         await portService.writeJSONFile(portService.PORT_FILE, updatedPorts);
+        // 读取现有端口
+        const existingPorts = await portService.readJSONFile(portService.PORT_FILE);
 
-//         res.json({
-//             success: true,
-//             message: `成功添加 ${newPorts.length} 个端口`,
-//             addedPorts: newPorts
-//         });
+        // 过滤出新的端口和需要更新的端口
+        const newPorts = [];
+        const updatedPorts = [];
 
-//     } catch (error) {
-//         res.status(500).json({
-//             success: false,
-//             message: `批量添加端口失败: ${error.message}`
-//         });
-//     }
-// });
+        ports.forEach(newPort => {
+            const existingPort = existingPorts.find(p => p.port === newPort.port);
+            if (existingPort) {
+                // 如果端口已存在,添加到更新列表
+                updatedPorts.push(newPort);
+            } else {
+                // 如果是新端口,添加到新端口列表
+                newPorts.push(newPort);
+            }
+        });
+
+        // 将未修改的旧端口与新端口和更新的端口合并
+        const finalPorts = [
+            ...existingPorts.filter(p => !updatedPorts.some(up => up.port === p.port)),
+            ...updatedPorts,
+            ...newPorts
+        ];
+        //删除这些端口
+        await portService.deletePortArray(updatedPorts);
+        // 添加这些修改的端口
+        await portService.addPortArray(updatedPorts);
+        // 添加这些新增的端口
+        await portService.addPortArray(newPorts);
+
+        if (!portService.isLinux()) {
+            //清空再写入新的
+            await portService.writeJSONFile(portService.PORT_FILE, []);
+            //添加新传入的数组
+            await portService.writeJSONFile(portService.PORT_FILE, finalPorts);
+        }
+
+        res.json({
+            success: true,
+            message: `成功添加 ${newPorts.length} 个端口, 更新 ${updatedPorts.length} 个端口`,
+            addedPorts: newPorts,
+            updatedPorts: updatedPorts
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: `批量添加端口失败: ${error.message}`
+        });
+    }
+});
 // 批量更新端口
 router.post('/batch/update/ports', async (req, res) => {
     try {
@@ -131,12 +174,21 @@ router.post('/batch/update/ports', async (req, res) => {
                 message: '无效的端口数据格式'
             });
         }
-
+         //逐行判断，哪一行格式错误
+         for(let i = 0; i < newPorts.length; i++) {
+            const port = newPorts[i];
+            if(!port.port || !port.name || !port.download || !port.upload) {
+                return res.status(400).json({
+                    success: false,
+                    message: `第 ${i + 1} 行数据格式错误，请检查`
+                });
+            }
+           }
         // 读取现有端口数据
         const existingPorts = await portService.readJSONFile(portService.PORT_FILE);
 
         // 筛选出新增的端口
-        const addedPorts = newPorts.filter(newPort => 
+        const addedPorts = newPorts.filter(newPort =>
             !existingPorts.some(existingPort => existingPort.port === newPort.port)
         );
         // 添加端口
@@ -146,7 +198,7 @@ router.post('/batch/update/ports', async (req, res) => {
         const modifiedPorts = newPorts.filter(newPort => {
             const existingPort = existingPorts.find(p => p.port === newPort.port);
             return existingPort && (
-                existingPort.upload !== newPort.upload || 
+                existingPort.upload !== newPort.upload ||
                 existingPort.download !== newPort.download ||
                 existingPort.name !== newPort.name
             );
@@ -191,10 +243,10 @@ router.post('/batch/update/ports', async (req, res) => {
 router.delete('/delete/ports/:port', async (req, res) => {
     try {
         const { port } = req.params;
-        
+
         // 读取现有端口数据
         const existingPorts = await portService.readJSONFile(portService.PORT_FILE);
-        
+
         // 检查端口是否存在
         const portExists = existingPorts.some(p => p.port === port);
         if (!portExists) {
@@ -204,10 +256,10 @@ router.delete('/delete/ports/:port', async (req, res) => {
             });
         }
         // 删除端口
-        await portService.deletePort({port});
+        await portService.deletePort({ port });
         // 过滤掉要删除的端口
         const updatedPorts = existingPorts.filter(p => p.port !== port);
-        
+
         // 写入更新后的数据
         if (!portService.isLinux()) {
             await portService.writeJSONFile(portService.PORT_FILE, updatedPorts);
