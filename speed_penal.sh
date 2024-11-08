@@ -315,7 +315,38 @@ view_logs() {
   echo -e "${YELLOW}显示最后100行的实时日志，按 Ctrl+C 退出...${NC}"
   journalctl -u speed-panel -n 100 -f
 }
-
+# 函数：修改访问密码
+change_password() {
+    echo -e "${YELLOW}修改访问密码${NC}"
+    
+    # 检查配置文件是否存在
+    if [ ! -f "/xs/speed_limit_v1/data/config.json" ]; then
+        echo -e "${RED}配置文件不存在,请先安装并启动项目${NC}"
+        return 1
+    fi
+    
+    # 读取新密码
+    read -p "请输入新的访问密码: " new_password
+    
+    # 验证密码不为空
+    if [ -z "$new_password" ]; then
+        echo -e "${RED}密码不能为空${NC}"
+        return 1
+    fi
+    
+    # 更新配置文件中的密码
+    echo "{\"password\":\"$new_password\"}" > /xs/speed_limit_v1/data/config.json
+    
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}密码修改成功${NC}"
+        # 重启服务使新密码生效
+        systemctl restart speed-panel
+        echo -e "${GREEN}服务已重启,新密码生效${NC}"
+    else
+        echo -e "${RED}密码修改失败${NC}"
+        return 1
+    fi
+}
 # 函数：显示菜单
 show_menu() {
   echo -e "${YELLOW}spl 项目管理菜单:${NC}"
@@ -326,7 +357,8 @@ show_menu() {
   echo "5. 查看实时日志"
   echo "6. 检查环境依赖"
   echo "7. 安装限速脚本"
-  echo "8. 卸载 speed_limit_panel"
+  echo "8. 修改访问密码"
+  echo "9. 卸载 speed_limit_panel"
   echo -e "${YELLOW}按 Ctrl+C 退出脚本${NC}"
 }
 
@@ -368,6 +400,9 @@ main() {
         install_speed_script
         ;;
       8)
+        change_password
+        ;;
+      9)
         uninstall_speed_limit
         ;;
       *)
