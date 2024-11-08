@@ -257,16 +257,14 @@ install_speed_limit() {
   fi
 
     # 步骤 3: 安装 unzip（如果需要）
-    if ! command -v unzip >/dev/null 2>&1; then
-        echo -e "${YELLOW}正在安装 unzip...${NC}"
-        if [[ -f /etc/debian_version ]]; then
-            apt-get update && apt-get install -y unzip
-        elif [[ -f /etc/redhat-release ]]; then
-            yum install -y unzip
-        else
-            echo -e "${RED}无法安装 unzip，请手动安装${NC}"
-            exit 1
-        fi
+    echo -e "${YELLOW}正在更新 unzip...${NC}"
+    if [[ -f /etc/debian_version ]]; then
+        apt-get install -y unzip
+    elif [[ -f /etc/redhat-release ]]; then
+        yum update -y unzip
+    else
+        echo -e "${RED}无法更新 unzip，请手动更新${NC}"
+        exit 1
     fi
 
     # 步骤 4: 解压并重命名
