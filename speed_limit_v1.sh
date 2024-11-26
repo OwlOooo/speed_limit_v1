@@ -1,5 +1,5 @@
 #!/bin/bash
-################################多网卡脚本########################################
+################################单网卡脚本########################################
 # 颜色定义
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -138,17 +138,11 @@ init_config() {
 init_config
 
 # 获取网卡名称
-INTERFACES=($(ls /sys/class/net/ | grep -v -E "lo|ifb"))
-if [ ${#INTERFACES[@]} -eq 0 ]; then
+INTERFACE=$(ip route | grep default | awk '{print $5}')
+if [ -z "$INTERFACE" ]; then
     echo -e "${RED}无法检测到网卡，请手动指定${NC}"
     exit 1
 fi
-
-# 打印检测到的网卡
-echo -e "${GREEN}检测到以下网卡:${NC}"
-for i in "${!INTERFACES[@]}"; do
-    echo "$((i+1)). ${INTERFACES[$i]}"
-done
 
 # 检查端口是否存在
 check_port_exists() {
@@ -191,33 +185,28 @@ update_port_config() {
 }
 # 初始化TC
 init_tc() {
-    for INTERFACE in "${INTERFACES[@]}"; do
-        # 清理现有规则
-        tc qdisc del dev $INTERFACE root 2>/dev/null
-        tc qdisc del dev $INTERFACE ingress 2>/dev/null
-        
-        # 加载 ifb 模块
-        modprobe ifb
-        
-        # 为每个网卡创建对应的 ifb 设备
-        local IFB="ifb${INTERFACE: -1}"
-        ip link set dev $IFB up 2>/dev/null || {
-            ip link add $IFB type ifb
-            ip link set dev $IFB up
-        }
-        tc qdisc del dev $IFB root 2>/dev/null
-        
-        # 创建根队列
-        tc qdisc add dev $INTERFACE root handle 1: htb default 999
-        tc class add dev $INTERFACE parent 1: classid 1:999 htb rate 1000mbit
-        
-        tc qdisc add dev $IFB root handle 1: htb default 999
-        tc class add dev $IFB parent 1: classid 1:999 htb rate 1000mbit
-        
-        # 设置入站重定向
-        tc qdisc add dev $INTERFACE handle ffff: ingress
-        tc filter add dev $INTERFACE parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev $IFB
-    done
+    # 清理现有规则
+    tc qdisc del dev $INTERFACE root 2>/dev/null
+    tc qdisc del dev $INTERFACE ingress 2>/dev/null
+    
+    # 加载 ifb 模块
+    modprobe ifb
+    ip link set dev ifb0 up 2>/dev/null || {
+        ip link add ifb0 type ifb
+        ip link set dev ifb0 up
+    }
+    tc qdisc del dev ifb0 root 2>/dev/null
+    
+    # 创建根队列
+    tc qdisc add dev $INTERFACE root handle 1: htb default 999
+    tc class add dev $INTERFACE parent 1: classid 1:999 htb rate 1000mbit
+    
+    tc qdisc add dev ifb0 root handle 1: htb default 999
+    tc class add dev ifb0 parent 1: classid 1:999 htb rate 1000mbit
+    
+    # 设置入站重定向
+    tc qdisc add dev $INTERFACE handle ffff: ingress
+    tc filter add dev $INTERFACE parent ffff: protocol ip u32 match u32 0 0 action mirred egress redirect dev ifb0
 }
 # 添加在init_tc函数后面
 # 清理并重新应用所有规则
@@ -226,12 +215,9 @@ reload_all_rules() {
     
     # 清理所有规则
     echo -e "${YELLOW}清理现有规则...${NC}"
-    for INTERFACE in "${INTERFACES[@]}"; do
-        local IFB="ifb${INTERFACE: -1}"
-        tc qdisc del dev $INTERFACE root 2>/dev/null
-        tc qdisc del dev $INTERFACE ingress 2>/dev/null
-        tc qdisc del dev $IFB root 2>/dev/null
-    done
+    tc qdisc del dev $INTERFACE root 2>/dev/null
+    tc qdisc del dev $INTERFACE ingress 2>/dev/null
+    tc qdisc del dev ifb0 root 2>/dev/null
     
     # 初始化TC
     init_tc
@@ -245,20 +231,16 @@ reload_all_rules() {
             local upload=$(echo $line | jq -r '.upload')
             local name=$(echo $line | jq -r '.name')
             
-            for INTERFACE in "${INTERFACES[@]}"; do
-                local IFB="ifb${INTERFACE: -1}"
-                
-                # 下载限速
-                local DOWNLOAD_KBPS=$((download * 1024))
-                local CLASS_ID=${port: -4}
-                tc class add dev $INTERFACE parent 1: classid 1:$CLASS_ID htb rate ${DOWNLOAD_KBPS}kbit ceil ${DOWNLOAD_KBPS}kbit burst 15k
-                tc filter add dev $INTERFACE parent 1: protocol ip prio 1 u32 match ip sport $port 0xffff flowid 1:$CLASS_ID
-                
-                # 上传限速
-                local UPLOAD_KBPS=$((upload * 1024))
-                tc class add dev $IFB parent 1: classid 1:$CLASS_ID htb rate ${UPLOAD_KBPS}kbit ceil ${UPLOAD_KBPS}kbit burst 15k
-                tc filter add dev $IFB parent 1: protocol ip prio 1 u32 match ip dport $port 0xffff flowid 1:$CLASS_ID
-            done
+            # 下载限速
+            local DOWNLOAD_KBPS=$((download * 1024))
+            local CLASS_ID=${port: -4}
+            tc class add dev $INTERFACE parent 1: classid 1:$CLASS_ID htb rate ${DOWNLOAD_KBPS}kbit ceil ${DOWNLOAD_KBPS}kbit burst 15k
+            tc filter add dev $INTERFACE parent 1: protocol ip prio 1 u32 match ip sport $port 0xffff flowid 1:$CLASS_ID
+            
+            # 上传限速
+            local UPLOAD_KBPS=$((upload * 1024))
+            tc class add dev ifb0 parent 1: classid 1:$CLASS_ID htb rate ${UPLOAD_KBPS}kbit ceil ${UPLOAD_KBPS}kbit burst 15k
+            tc filter add dev ifb0 parent 1: protocol ip prio 1 u32 match ip dport $port 0xffff flowid 1:$CLASS_ID
             
             echo -e "${GREEN}已设置端口 $port($name) - 下载: ${download}Mbps, 上传: ${upload}Mbps${NC}"
         done < <(jq -c '.[]' "$CONFIG_FILE")
@@ -276,23 +258,33 @@ add_limit() {
     local NAME=$4
     local CLASS_ID=${PORT: -4}
     
-    # 对每个网卡接口都应用限速规则
-    for INTERFACE in "${INTERFACES[@]}"; do
-        local IFB="ifb${INTERFACE: -1}"
-        
-        # 下载限速
-        local DOWNLOAD_KBPS=$((DOWNLOAD * 1024))
-        tc class add dev $INTERFACE parent 1: classid 1:$CLASS_ID htb rate ${DOWNLOAD_KBPS}kbit ceil ${DOWNLOAD_KBPS}kbit burst 15k
-        tc filter add dev $INTERFACE parent 1: protocol ip prio 1 u32 match ip sport $PORT 0xffff flowid 1:$CLASS_ID
-        
-        # 上传限速
-        local UPLOAD_KBPS=$((UPLOAD * 1024))
-        tc class add dev $IFB parent 1: classid 1:$CLASS_ID htb rate ${UPLOAD_KBPS}kbit ceil ${UPLOAD_KBPS}kbit burst 15k
-        tc filter add dev $IFB parent 1: protocol ip prio 1 u32 match ip dport $PORT 0xffff flowid 1:$CLASS_ID
-    done
+    # 检查参数
+    if [ -z "$PORT" ] || [ -z "$DOWNLOAD" ] || [ -z "$UPLOAD" ] || [ -z "$NAME" ]; then
+        echo -e "${RED}参数不完整！用法: xs add <端口> <下载速度> <上传速度> <名称>${NC}"
+        return 1
+    fi
+    
+    # 下载限速
+    local DOWNLOAD_KBPS=$((DOWNLOAD * 1024))
+    tc class add dev $INTERFACE parent 1: classid 1:$CLASS_ID htb rate ${DOWNLOAD_KBPS}kbit ceil ${DOWNLOAD_KBPS}kbit burst 15k
+    tc filter add dev $INTERFACE parent 1: protocol ip prio 1 u32 match ip sport $PORT 0xffff flowid 1:$CLASS_ID
+    
+    # 上传限速
+    local UPLOAD_KBPS=$((UPLOAD * 1024))
+    tc class add dev ifb0 parent 1: classid 1:$CLASS_ID htb rate ${UPLOAD_KBPS}kbit ceil ${UPLOAD_KBPS}kbit burst 15k
+    tc filter add dev ifb0 parent 1: protocol ip prio 1 u32 match ip dport $PORT 0xffff flowid 1:$CLASS_ID
     
     # 更新配置文件
     update_port_config "$PORT" "$DOWNLOAD" "$UPLOAD" "$NAME"
+    
+    if check_port_exists "$PORT"; then
+        echo -e "${GREEN}端口 $PORT($NAME) 限速规则已更新：下载 ${DOWNLOAD}Mbps，上传 ${UPLOAD}Mbps${NC}"
+    else
+        echo -e "${GREEN}端口 $PORT($NAME) 限速规则已添加：下载 ${DOWNLOAD}Mbps，上传 ${UPLOAD}Mbps${NC}"
+    fi
+    
+    # 重启服务以确保规则生效
+    systemctl restart xs-limit
 }
 
 # 删除限速规则
@@ -305,14 +297,10 @@ remove_limit() {
         return 1
     fi
     
-    # 修改为遍历所有网卡
-    for INTERFACE in "${INTERFACES[@]}"; do
-        local IFB="ifb${INTERFACE: -1}"
-        tc filter del dev $INTERFACE parent 1: protocol ip prio 1 u32 match ip sport $PORT 0xffff 2>/dev/null
-        tc filter del dev $IFB parent 1: protocol ip prio 1 u32 match ip dport $PORT 0xffff 2>/dev/null
-        tc class del dev $INTERFACE parent 1: classid 1:$CLASS_ID 2>/dev/null
-        tc class del dev $IFB parent 1: classid 1:$CLASS_ID 2>/dev/null
-    done
+    tc filter del dev $INTERFACE parent 1: protocol ip prio 1 u32 match ip sport $PORT 0xffff 2>/dev/null
+    tc filter del dev ifb0 parent 1: protocol ip prio 1 u32 match ip dport $PORT 0xffff 2>/dev/null
+    tc class del dev $INTERFACE parent 1: classid 1:$CLASS_ID 2>/dev/null
+    tc class del dev ifb0 parent 1: classid 1:$CLASS_ID 2>/dev/null
     
     # 从JSON中删除
     local TMP_FILE=$(mktemp)
@@ -320,6 +308,8 @@ remove_limit() {
     mv "$TMP_FILE" "$CONFIG_FILE"
     
     echo -e "${GREEN}端口 $PORT 的限速规则已删除${NC}"
+    
+    systemctl restart xs-limit
 }
 
 # 显示单个端口限速信息
@@ -393,6 +383,9 @@ monitor_resources() {
         # 获取系统负载
         local LOAD=$(cat /proc/loadavg | awk '{print $1,$2,$3}')
         
+        # 获取网络统计
+        local NETWORK_STATS=$(ifconfig $INTERFACE | grep "RX packets\|TX packets")
+        
         # 获取tc规则数量
         local TC_RULES=$(tc -s qdisc show | wc -l)
         
@@ -415,14 +408,10 @@ monitor_resources() {
         # 每10行显示网络统计
         if [ $((HEADER_PRINTED % 10)) -eq 0 ]; then
             echo -e "\n网络统计:"
-            for INTERFACE in "${INTERFACES[@]}"; do
-                local IFB="ifb${INTERFACE: -1}"
-                echo -e "\n${YELLOW}网卡 $INTERFACE:${NC}"
-                ifconfig $INTERFACE | grep "RX packets\|TX packets"
-                echo -e "\nTC类统计:"
-                tc -s class show dev $INTERFACE | grep -E "class|Sent"
-                tc -s class show dev $IFB | grep -E "class|Sent"
-            done
+            echo "$NETWORK_STATS"
+            echo -e "\nTC类统计:"
+            tc -s class show dev $INTERFACE | grep -E "class|Sent"
+            tc -s class show dev ifb0 | grep -E "class|Sent"
             echo "--------------------------------------------------------------------------------"
         fi
 
@@ -439,95 +428,84 @@ monitor_resources() {
 show_tc_stats() {
     echo -e "\n${BLUE}TC详细统计信息:${NC}"
     echo "================================================================================"
-    
-    for INTERFACE in "${INTERFACES[@]}"; do
-        local IFB="ifb${INTERFACE: -1}"
-        
-        echo -e "${YELLOW}网卡 $INTERFACE 下载限速统计:${NC}"
-        tc -s qdisc show dev $INTERFACE
-        tc -s class show dev $INTERFACE
-        tc -s filter show dev $INTERFACE
+    echo -e "${YELLOW}下载限速统计(物理网卡):${NC}"
+    tc -s qdisc show dev $INTERFACE
+    tc -s class show dev $INTERFACE
+    tc -s filter show dev $INTERFACE
 
-        echo -e "\n${YELLOW}网卡 $INTERFACE 上传限速统计(IFB设备 $IFB):${NC}"
-        tc -s qdisc show dev $IFB
-        tc -s class show dev $IFB
-        tc -s filter show dev $IFB
-        echo "--------------------------------------------------------------------------------"
-    done
+    echo -e "\n${YELLOW}上传限速统计(IFB设备):${NC}"
+    tc -s qdisc show dev ifb0
+    tc -s class show dev ifb0
+    tc -s filter show dev ifb0
 }
 # 查询实际限速规则
 show_active_rules() {
     echo -e "\n${PURPLE}解析当前活动的限速规则：${NC}"
     echo -e "${PURPLE}=================================================================${NC}"
-    echo -e "${PURPLE}端口\t\t网卡\t\t下载限速\t上传限速\t当前使用量${NC}"
+    echo -e "${PURPLE}端口\t\t下载限速\t上传限速\t当前使用量${NC}"
     echo -e "${PURPLE}----------------------------------------------------------------${NC}"
 
-    for INTERFACE in "${INTERFACES[@]}"; do
-        local IFB="ifb${INTERFACE: -1}"
+    # 获取所有 class 信息（排除默认类1:999）
+    local class_info=$(tc class show dev $INTERFACE | grep "htb" | grep -v "1:999")
+    if [ -z "$class_info" ]; then
+        echo -e "${YELLOW}当前没有活动的限速规则${NC}"
+        return
+    fi
+
+    # 逐行处理每个 class
+    echo "$class_info" | while read -r line; do
+        local class_id=$(echo "$line" | awk '{print $3}')
         
-        # 获取所有 class 信息（排除默认类1:999）
-        local class_info=$(tc class show dev $INTERFACE | grep "htb" | grep -v "1:999")
-        if [ ! -z "$class_info" ]; then
-            # 逐行处理每个 class
-            while read -r line; do
-                local class_id=$(echo "$line" | awk '{print $3}')
-                local id=${class_id#1:}
-                
-                # 获取下载限速值
-                local down_rate=$(echo "$line" | grep -o "rate [0-9]*Kbit" | awk '{print $2}' | sed 's/Kbit//')
-                local down_mbps=$(echo "scale=2; $down_rate/1024" | bc)
-                
-                # 获取上传限速值
-                local up_class=$(tc class show dev $IFB | grep "1:$id")
-                local up_rate=$(echo "$up_class" | grep -o "rate [0-9]*Kbit" | awk '{print $2}' | sed 's/Kbit//')
-                local up_mbps=$(echo "scale=2; $up_rate/1024" | bc)
-                
-                # 获取端口号
-                local filter_info=$(tc filter show dev $INTERFACE | grep -A1 "flowid $class_id" | grep "match")
-                local port=""
-                if [[ $filter_info =~ match[[:space:]]([0-9a-fA-F]{4})0000/ffff0000[[:space:]]at[[:space:]]20 ]]; then
-                    port=$(printf "%d" "0x${BASH_REMATCH[1]}")
-                fi
+        # 从class_id中提取ID部分（去掉1:）
+        local id=${class_id#1:}
+        
+        # 获取下载限速值（当前 class）
+        local down_rate=$(echo "$line" | grep -o "rate [0-9]*Kbit" | awk '{print $2}' | sed 's/Kbit//')
+        local down_mbps=$(echo "scale=2; $down_rate/1024" | bc)
+        
+        # 获取上传限速值（从ifb0设备）
+        local up_class=$(tc class show dev ifb0 | grep "1:$id")
+        local up_rate=$(echo "$up_class" | grep -o "rate [0-9]*Kbit" | awk '{print $2}' | sed 's/Kbit//')
+        local up_mbps=$(echo "scale=2; $up_rate/1024" | bc)
+        
+        # 获取端口号（从filter规则）
+        local filter_info=$(tc filter show dev $INTERFACE | grep -A1 "flowid $class_id" | grep "match")
+        local port=""
+        if [[ $filter_info =~ match[[:space:]]([0-9a-fA-F]{4})0000/ffff0000[[:space:]]at[[:space:]]20 ]]; then
+            port=$(printf "%d" "0x${BASH_REMATCH[1]}")
+        fi
 
-                # 获取流量统计
-                local down_stats=$(tc -s class show dev $INTERFACE | grep -A1 "htb 1:$id" | grep "Sent")
-                local down_bytes=$(echo "$down_stats" | awk '{print $2}')
-                local down_mb=$(echo "scale=2; $down_bytes/1024/1024" | bc)
-                
-                local up_stats=$(tc -s class show dev $IFB | grep -A1 "htb 1:$id" | grep "Sent")
-                local up_bytes=$(echo "$up_stats" | awk '{print $2}')
-                local up_mb=$(echo "scale=2; $up_bytes/1024/1024" | bc)
+        # 获取流量统计
+        local down_stats=$(tc -s class show dev $INTERFACE | grep -A1 "htb 1:$id" | grep "Sent")
+        local down_bytes=$(echo "$down_stats" | awk '{print $2}')
+        local down_mb=$(echo "scale=2; $down_bytes/1024/1024" | bc)
+        
+        local up_stats=$(tc -s class show dev ifb0 | grep -A1 "htb 1:$id" | grep "Sent")
+        local up_bytes=$(echo "$up_stats" | awk '{print $2}')
+        local up_mb=$(echo "scale=2; $up_bytes/1024/1024" | bc)
 
-                if [ ! -z "$port" ]; then
-                    printf "${PURPLE}%-8s\t%-8s\t%-8s\t%-8s\t↓%.2fMB ↑%.2fMB${NC}\n" \
-                        "$port" "$INTERFACE" "${down_mbps}Mbps" "${up_mbps}Mbps" "$down_mb" "$up_mb"
-                fi
-            done <<< "$class_info"
+        if [ ! -z "$port" ]; then
+            printf "${PURPLE}%-8s\t%-8s\t%-8s\t↓%.2fMB ↑%.2fMB${NC}\n" \
+                "$port" "${down_mbps}Mbps" "${up_mbps}Mbps" "$down_mb" "$up_mb"
         fi
     done
-    
     echo -e "${PURPLE}----------------------------------------------------------------${NC}"
     
     # 显示系统总流量
     echo -e "\n${PURPLE}系统总流量统计：${NC}"
-    for INTERFACE in "${INTERFACES[@]}"; do
-        local IFB="ifb${INTERFACE: -1}"
-        local total_down=$(tc -s qdisc show dev $INTERFACE | grep "Sent" | head -1 | awk '{printf "%.2f", $2/1024/1024}')
-        local total_up=$(tc -s qdisc show dev $IFB | grep "Sent" | head -1 | awk '{printf "%.2f", $2/1024/1024}')
-        echo -e "${PURPLE}网卡 $INTERFACE - 总下行流量：${total_down} MB  总上行流量：${total_up} MB${NC}"
-    done
+    local total_down=$(tc -s qdisc show dev $INTERFACE | grep "Sent" | head -1 | awk '{printf "%.2f", $2/1024/1024}')
+    local total_up=$(tc -s qdisc show dev ifb0 | grep "Sent" | head -1 | awk '{printf "%.2f", $2/1024/1024}')
+    echo -e "${PURPLE}总下行流量：${total_down} MB${NC}"
+    echo -e "${PURPLE}总上行流量：${total_up} MB${NC}"
 }
 # 清除所有限速规则但保留配置
 clear_rules() {
     echo -e "${YELLOW}正在清除所有限速规则...${NC}"
     
     # 清除TC规则
-    for INTERFACE in "${INTERFACES[@]}"; do
-        local IFB="ifb${INTERFACE: -1}"
-        tc qdisc del dev $INTERFACE root 2>/dev/null
-        tc qdisc del dev $INTERFACE ingress 2>/dev/null
-        tc qdisc del dev $IFB root 2>/dev/null
-    done
+    tc qdisc del dev $INTERFACE root 2>/dev/null
+    tc qdisc del dev $INTERFACE ingress 2>/dev/null
+    tc qdisc del dev ifb0 root 2>/dev/null
     
     # 重新初始化TC
     init_tc
